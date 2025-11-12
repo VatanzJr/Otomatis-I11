@@ -1,6 +1,6 @@
 # deploy.ps1 - PLN TUL I-11 Automation Tool
 # Created by vatanzjr
-# Puppeteer v24 Compatible Version
+# One-Time Install Version
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  PLN TUL I-11 Automation Tool" -ForegroundColor Cyan
@@ -25,38 +25,40 @@ function Show-Info {
     Write-Host "📢 $message" -ForegroundColor Yellow
 }
 
-# Function untuk cleanup jika ada installasi sebelumnya yang gagal
-function Cleanup-PreviousInstall {
+# Function untuk check jika tool sudah terinstall
+function Check-ExistingInstallation {
     param([string]$projectPath)
     
-    Show-Info "Membersihkan installasi sebelumnya..."
+    $requiredFiles = @("package.json", "tulI11.js", "start-tuli11.bat")
+    foreach ($file in $requiredFiles) {
+        if (-not (Test-Path (Join-Path $projectPath $file))) {
+            return $false
+        }
+    }
+    return $true
+}
+
+# Function untuk check dependencies
+function Check-Dependencies {
+    param([string]$projectPath)
     
-    # Hapus node_modules jika ada
     $nodeModulesPath = Join-Path $projectPath "node_modules"
-    if (Test-Path $nodeModulesPath) {
-        try {
-            Remove-Item $nodeModulesPath -Recurse -Force -ErrorAction Stop
-            Show-Success "node_modules lama berhasil dihapus"
-        } catch {
-            Show-Error "Tidak bisa hapus node_modules, tapi lanjut terus..."
-        }
+    if (-not (Test-Path $nodeModulesPath)) {
+        return $false
     }
     
-    # Hapus package-lock.json jika ada
-    $packageLockPath = Join-Path $projectPath "package-lock.json"
-    if (Test-Path $packageLockPath) {
-        try {
-            Remove-Item $packageLockPath -Force -ErrorAction Stop
-            Show-Success "package-lock.json lama berhasil dihapus"
-        } catch {
-            Show-Error "Tidak bisa hapus package-lock.json, tapi lanjut terus..."
-        }
+    # Check jika puppeteer ada
+    $puppeteerPath = Join-Path $nodeModulesPath "puppeteer"
+    if (-not (Test-Path $puppeteerPath)) {
+        return $false
     }
+    
+    return $true
 }
 
 # Main installation process
 try {
-    Show-Info "Memulai instalasi PLN TUL I-11 Automation Tool..."
+    Show-Info "Memulai PLN TUL I-11 Automation Tool..."
     
     # 1. Check Node.js installation
     Show-Info "Checking Node.js installation..."
@@ -88,11 +90,54 @@ try {
     
     # 3. Create project directory
     $projectPath = Join-Path $env:USERPROFILE "PLN-TULI11-Tool"
+    
+    # Check jika tool sudah terinstall
+    $isAlreadyInstalled = Check-ExistingInstallation -projectPath $projectPath
+    $hasDependencies = Check-Dependencies -projectPath $projectPath
+    
+    if ($isAlreadyInstalled -and $hasDependencies) {
+        Show-Success "✅ Tool sudah terinstall dan siap digunakan!"
+        Show-Info "Project location: $projectPath"
+        Write-Host ""
+        
+        Show-Info "🚀 Menjalankan TUL I-11 Tool..."
+        Start-Sleep -Seconds 2
+        Set-Location $projectPath
+        Start-Process "start-tuli11.bat" -Wait
+        exit 0
+    }
+    
+    if ($isAlreadyInstalled -and (-not $hasDependencies)) {
+        Show-Info "Tool sudah terinstall tapi dependencies belum ada."
+        Show-Info "Menginstall dependencies..."
+        Set-Location $projectPath
+        npm install
+        if ($LASTEXITCODE -eq 0) {
+            Show-Success "✅ Dependencies berhasil diinstall!"
+            Show-Info "🚀 Menjalankan TUL I-11 Tool..."
+            Start-Sleep -Seconds 2
+            Start-Process "start-tuli11.bat" -Wait
+            exit 0
+        } else {
+            Show-Error "❌ Gagal install dependencies"
+            Show-Info "Silakan jalankan manual: npm install"
+            exit 1
+        }
+    }
+    
+    # Jika belum terinstall, buat fresh install
     Show-Info "Membuat direktori project: $projectPath"
     
     if (Test-Path $projectPath) {
-        Show-Info "Direktori sudah ada, membersihkan..."
-        Cleanup-PreviousInstall -projectPath $projectPath
+        Show-Info "Direktori sudah ada, membuat instalasi fresh..."
+        # Hanya hapus file-file tool, biarkan node_modules jika ada
+        $filesToRemove = @("package.json", "tulI11.js", "start-tuli11.bat", "test-deps.bat")
+        foreach ($file in $filesToRemove) {
+            $filePath = Join-Path $projectPath $file
+            if (Test-Path $filePath) {
+                Remove-Item $filePath -Force -ErrorAction SilentlyContinue
+            }
+        }
     } else {
         New-Item -ItemType Directory -Path $projectPath -Force | Out-Null
     }
@@ -110,8 +155,7 @@ try {
   "main": "tulI11.js",
   "scripts": {
     "start": "node tulI11.js",
-    "tuli11": "node tulI11.js",
-    "test-deps": "node -e \"try { require('puppeteer'); console.log('✅ Puppeteer OK'); } catch(e) { console.log('❌ Puppeteer missing'); } try { require('axios'); console.log('✅ Axios OK'); } catch(e) { console.log('❌ Axios missing'); } try { require('qs'); console.log('✅ QS OK'); } catch(e) { console.log('❌ QS missing'); }\""
+    "tuli11": "node tulI11.js"
   },
   "dependencies": {
     "puppeteer": "^24.15.0",
@@ -126,10 +170,10 @@ try {
     # Gunakan encoding ASCII tanpa BOM
     $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
     [System.IO.File]::WriteAllText("$projectPath\package.json", $packageJsonContent, $utf8NoBom)
-    Show-Success "package.json created dengan encoding yang benar"
+    Show-Success "package.json created"
     
     # 5. Create tulI11.js dengan Puppeteer v24 compatibility
-    Show-Info "Membuat tulI11.js (Puppeteer v24 compatible)..."
+    Show-Info "Membuat tulI11.js..."
     $tulI11Content = @'
 const puppeteer = require('puppeteer');
 const axios = require('axios');
@@ -328,194 +372,46 @@ process.on('unhandledRejection', (reason, promise) => {
 main();
 '@
     $tulI11Content | Out-File -FilePath "tulI11.js" -Encoding ASCII
-    Show-Success "tulI11.js created (Puppeteer v24 compatible)"
+    Show-Success "tulI11.js created"
     
-    # 6. Create robust batch file dengan self-diagnose
-    Show-Info "Membuat file batch dengan fitur self-diagnose..."
+    # 6. Create simple batch file
+    Show-Info "Membuat file batch..."
     $batchContent = @'
 @echo off
 chcp 65001 >nul
 color 0B
 title PLN TUL I-11 Tool
 
-set "NODE_PATH=%~dp0node_modules"
-set "NODE_ENV=production"
-
-:menu
-cls
 echo ========================================
 echo   PLN TUL I-11 Automation Tool
 echo ========================================
 echo.
-echo [1] Jalankan TUL I-11 Tool
-echo [2] Install Dependencies (npm install)
-echo [3] Fix Module Path Issue
-echo [4] Test Dependencies
-echo [5] Buka Folder Project
-echo [6] Keluar
+echo Menjalankan TUL I-11 Tool...
 echo.
-set /p choice="Pilih opsi (1/6): "
-
-if "%choice%"=="1" (
-  cls
-  echo ========================================
-  echo   JALANKAN TUL I-11 TOOL
-  echo ========================================
-  echo.
-  echo Memeriksa dependencies...
-  echo.
-  node -e "try { require('puppeteer'); console.log('✅ Puppeteer OK'); } catch(e) { console.log('❌ Puppeteer missing'); process.exit(1); }" >nul 2>&1
-  if errorlevel 1 (
-    echo ❌ ERROR: Module puppeteer tidak ditemukan!
-    echo.
-    echo 💡 SOLUSI:
-    echo   1. Pilih option [2] untuk install dependencies
-    echo   2. Atau pilih [3] untuk fix module path
-    echo   3. Pastikan sudah run sebagai Administrator
-    echo.
-    pause
-    goto menu
-  )
-  
-  node -e "try { require('axios'); console.log('✅ Axios OK'); } catch(e) { console.log('❌ Axios missing'); process.exit(1); }" >nul 2>&1
-  if errorlevel 1 (
-    echo ❌ ERROR: Module axios tidak ditemukan!
-    echo.
-    echo 💡 SOLUSI:
-    echo   1. Pilih option [2] untuk install dependencies
-    echo   2. Atau pilih [3] untuk fix module path
-    echo   3. Pastikan sudah run sebagai Administrator
-    echo.
-    pause
-    goto menu
-  )
-  
-  node -e "try { require('qs'); console.log('✅ QS OK'); } catch(e) { console.log('❌ QS missing'); process.exit(1); }" >nul 2>&1
-  if errorlevel 1 (
-    echo ❌ ERROR: Module qs tidak ditemukan!
-    echo.
-    echo 💡 SOLUSI:
-    echo   1. Pilih option [2] untuk install dependencies
-    echo   2. Atau pilih [3] untuk fix module path  
-    echo   3. Pastikan sudah run sebagai Administrator
-    echo.
-    pause
-    goto menu
-  )
-  
-  echo ✅ Semua dependencies OK!
-  echo.
-  echo 🚀 Menjalankan TUL I-11 Tool...
-  echo.
-  node tulI11.js
-  echo.
-  pause
-  goto menu
-) else if "%choice%"=="2" (
-  cls
-  echo ========================================
-  echo   INSTALL DEPENDENCIES
-  echo ========================================
-  echo.
-  echo Menginstall dependencies...
-  echo ⏳ Ini mungkin butuh beberapa menit...
-  echo.
-  call npm install
-  echo.
-  if %errorlevel% equ 0 (
-    echo ✅ Dependencies berhasil diinstall!
-    echo.
-    echo 💡 Sekarang test dengan option [4]
-  ) else (
-    echo ❌ Install dependencies gagal.
-    echo.
-    echo 💡 Coba:
-    echo   1. Jalankan sebagai Administrator
-    echo   2. Pastikan koneksi internet stabil
-    echo   3. Coba option [3] untuk fix
-  )
-  echo.
-  pause
-  goto menu
-) else if "%choice%"=="3" (
-  cls
-  echo ========================================
-  echo   FIX MODULE PATH ISSUE
-  echo ========================================
-  echo.
-  echo Memperbaiki module path...
-  echo.
-  echo 1. Membersihkan cache...
-  call npm cache clean --force
-  echo.
-  echo 2. Hapus node_modules lama...
-  rmdir /s /q node_modules 2>nul
-  echo.
-  echo 3. Install ulang dependencies...
-  call npm install
-  echo.
-  echo 4. Verifikasi install...
-  node -e "try { require('puppeteer'); console.log('✅ Puppeteer OK'); } catch(e) { console.log('❌ Puppeteer missing'); }"
-  node -e "try { require('axios'); console.log('✅ Axios OK'); } catch(e) { console.log('❌ Axios missing'); }"
-  node -e "try { require('qs'); console.log('✅ QS OK'); } catch(e) { console.log('❌ QS missing'); }"
-  echo.
-  echo 💡 Sekarang test dengan option [4]
-  echo.
-  pause
-  goto menu
-) else if "%choice%"=="4" (
-  cls
-  echo ========================================
-  echo   TEST DEPENDENCIES
-  echo ========================================
-  echo.
-  echo Testing semua dependencies...
-  echo.
-  node -e "try { require('puppeteer'); console.log('✅ Puppeteer OK'); } catch(e) { console.log('❌ Puppeteer missing'); }"
-  node -e "try { require('axios'); console.log('✅ Axios OK'); } catch(e) { console.log('❌ Axios missing'); }"
-  node -e "try { require('qs'); console.log('✅ QS OK'); } catch(e) { console.log('❌ QS missing'); }"
-  echo.
-  echo 💡 STATUS:
-  echo   - Jika semua ✅ OK: Bisa jalankan option [1]
-  echo   - Jika ada ❌ missing: Jalankan option [2] atau [3]
-  echo.
-  pause
-  goto menu
-) else if "%choice%"=="5" (
-  explorer .
-  goto menu
-) else if "%choice%"=="6" (
-  exit
-) else (
-  echo Pilihan tidak valid!
-  timeout /t 2 >nul
-  goto menu
-)
-'@
-    $batchContent | Out-File -FilePath "start-tuli11.bat" -Encoding ASCII
-    Show-Success "start-tuli11.bat created dengan fitur self-diagnose"
-    
-    # 7. Create quick test file
-    Show-Info "Membuat file test cepat..."
-    $testContent = @'
-@echo off
-echo Testing Node.js dan dependencies...
-node --version
-npm --version
+node tulI11.js
 echo.
-echo Testing modules...
-node -e "try { require('puppeteer'); console.log('✅ Puppeteer OK'); } catch(e) { console.log('❌ Puppeteer error:', e.message); }"
-node -e "try { require('axios'); console.log('✅ Axios OK'); } catch(e) { console.log('❌ Axios error:', e.message); }" 
-node -e "try { require('qs'); console.log('✅ QS OK'); } catch(e) { console.log('❌ QS error:', e.message); }"
 pause
 '@
-    $testContent | Out-File -FilePath "test-deps.bat" -Encoding ASCII
-    Show-Success "test-deps.bat created"
+    $batchContent | Out-File -FilePath "start-tuli11.bat" -Encoding ASCII
+    Show-Success "start-tuli11.bat created"
+    
+    # 7. Install dependencies
+    Show-Info "Menginstall dependencies..."
+    Write-Host "⏳ Ini mungkin butuh beberapa menit..." -ForegroundColor Yellow
+    npm install
+    
+    if ($LASTEXITCODE -eq 0) {
+        Show-Success "✅ Dependencies berhasil diinstall!"
+    } else {
+        Show-Error "❌ Gagal install dependencies"
+        Show-Info "Silakan jalankan manual: npm install"
+        exit 1
+    }
     
     # 8. Verification
     Show-Info "Memverifikasi instalasi..."
     
-    $requiredFiles = @("package.json", "tulI11.js", "start-tuli11.bat", "test-deps.bat")
+    $requiredFiles = @("package.json", "tulI11.js", "start-tuli11.bat")
     $allFilesExist = $true
     
     foreach ($file in $requiredFiles) {
@@ -534,7 +430,7 @@ pause
     
     # 9. Completed
     Write-Host ""
-    Show-Success "🎉 INSTALASI FILE BERHASIL!"
+    Show-Success "🎉 INSTALASI BERHASIL!"
     Show-Info "Project location: $projectPath"
     Write-Host ""
     
@@ -544,56 +440,11 @@ pause
     }
     Write-Host ""
     
-    Show-Info "🚀 CARA MENGGUNAKAN:"
-    Write-Host "   1. Buka folder: $projectPath" -ForegroundColor White
-    Write-Host "   2. Jalankan: start-tuli11.bat" -ForegroundColor White
-    Write-Host "   3. Pilih [4] Test Dependencies TERLEBIH DAHULU" -ForegroundColor White
-    Write-Host "   4. Jika ada yang missing, pilih [2] atau [3]" -ForegroundColor White
-    Write-Host "   5. Setelah semua ✅ OK, pilih [1] untuk menjalankan" -ForegroundColor White
-    Write-Host ""
+    Show-Info "🚀 Menjalankan TUL I-11 Tool..."
+    Start-Sleep -Seconds 2
     
-    Show-Info "💡 TIPS PENTING:"
-    Write-Host "   - Jalankan sebagai Administrator jika ada permission error" -ForegroundColor Yellow
-    Write-Host "   - Selalu test dependencies dulu sebelum run tool" -ForegroundColor Yellow
-    Write-Host "   - Menu punya fitur auto-diagnose dan fix" -ForegroundColor Yellow
-    Write-Host "   - Tool sekarang compatible dengan Puppeteer v24+" -ForegroundColor Green
-    Write-Host ""
-    
-    # 10. Tanya user apakah mau test sekarang
-    $answer = Read-Host "Jalankan test dependencies sekarang? (y/n)"
-    if ($answer -eq 'y' -or $answer -eq 'Y') {
-        Show-Info "Menjalankan test dependencies..."
-        Start-Sleep -Seconds 2
-        
-        # Test Node.js dan npm
-        Write-Host "=== TEST NODE.JS & NPM ===" -ForegroundColor Cyan
-        node --version
-        npm --version
-        
-        # Test jika dependencies sudah ada
-        Write-Host "`n=== TEST DEPENDENCIES ===" -ForegroundColor Cyan
-        if (Test-Path "node_modules") {
-            Write-Host "node_modules ditemukan..." -ForegroundColor Green
-            node -e "try { require('puppeteer'); console.log('✅ Puppeteer OK'); } catch(e) { console.log('❌ Puppeteer missing'); }"
-            node -e "try { require('axios'); console.log('✅ Axios OK'); } catch(e) { console.log('❌ Axios missing'); }"
-            node -e "try { require('qs'); console.log('✅ QS OK'); } catch(e) { console.log('❌ QS missing'); }"
-        } else {
-            Write-Host "❌ node_modules belum ada" -ForegroundColor Red
-            Write-Host "💡 Jalankan 'npm install' dulu" -ForegroundColor Yellow
-        }
-        
-        Write-Host ""
-        Show-Info "Tekan Enter untuk membuka menu tool..."
-        Pause
-        Start-Process "start-tuli11.bat" -Wait
-    } else {
-        Show-Info "Anda bisa jalankan tool nanti dengan:"
-        Write-Host "   $projectPath\start-tuli11.bat" -ForegroundColor White
-        Write-Host ""
-        Show-Info "Tekan Enter untuk membuka folder..."
-        Pause
-        Start-Process "explorer" -ArgumentList $projectPath -Wait
-    }
+    # Run the tool
+    Start-Process "start-tuli11.bat" -Wait
     
 } catch {
     Show-Error "Terjadi error selama instalasi: $($_.Exception.Message)"
@@ -606,6 +457,10 @@ Write-Host ""
 Show-Info "📞 SUPPORT & UPDATE:"
 Write-Host "   GitHub: https://github.com/vatanzjr/otomatis-I11" -ForegroundColor White
 Write-Host ""
-Show-Info "Untuk install ulang atau update, jalankan:"
-Write-Host "   irm https://raw.githubusercontent.com/vatanzjr/otomatis-I11/main/deploy.ps1 | iex" -ForegroundColor White
+Show-Info "UNTUK NEXT TIME:"
+Write-Host "   Buka folder: $projectPath" -ForegroundColor White
+Write-Host "   Jalankan: start-tuli11.bat" -ForegroundColor White
+Write-Host "   Atau langsung: node tulI11.js" -ForegroundColor White
+Write-Host ""
+Show-Info "Hanya install sekali, selanjutnya langsung run tool saja!"
 Write-Host ""
