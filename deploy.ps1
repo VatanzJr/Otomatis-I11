@@ -1,5 +1,5 @@
 # deploy.ps1 - PLN TUL I-11 Automation Tool
-# Created by Your Name
+# Created by vatanzjr
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  PLN TUL I-11 Automation Tool" -ForegroundColor Cyan
@@ -22,6 +22,46 @@ function Show-Success {
 function Show-Info {
     param([string]$message)
     Write-Host "📢 $message" -ForegroundColor Yellow
+}
+
+# Function untuk install dependencies dengan retry
+function Install-Dependencies {
+    $maxRetries = 2
+    $retryCount = 0
+    
+    while ($retryCount -lt $maxRetries) {
+        try {
+            Show-Info "Menginstall dependencies npm (Attempt $($retryCount + 1))..."
+            
+            # Jalankan npm install dengan timeout
+            $process = Start-Process -FilePath "npm" -ArgumentList "install" -Wait -PassThru -NoNewWindow
+            
+            if ($process.ExitCode -eq 0) {
+                Show-Success "Dependencies berhasil diinstall"
+                return $true
+            } else {
+                Show-Error "npm install gagal dengan exit code: $($process.ExitCode)"
+                $retryCount++
+                
+                if ($retryCount -lt $maxRetries) {
+                    Show-Info "Retry dalam 5 detik..."
+                    Start-Sleep -Seconds 5
+                }
+            }
+        } catch {
+            Show-Error "Error selama npm install: $($_.Exception.Message)"
+            $retryCount++
+            
+            if ($retryCount -lt $maxRetries) {
+                Show-Info "Retry dalam 5 detik..."
+                Start-Sleep -Seconds 5
+            }
+        }
+    }
+    
+    Show-Error "Gagal install dependencies setelah $maxRetries attempts"
+    Show-Info "Coba jalankan manual: npm install"
+    return $false
 }
 
 # Main installation process
@@ -86,7 +126,7 @@ try {
     "qs": "^6.11.2"
   },
   "keywords": ["pln", "automation", "tul-i11", "puppeteer"],
-  "author": "Your Name",
+  "author": "vatanzjr",
   "license": "MIT"
 }
 '@
@@ -103,7 +143,7 @@ const qs = require('qs');
 
 // === KONFIGURASI HARCODED ===
 const APPS_SCRIPT_PKBA_URL = 'https://script.google.com/macros/s/AKfycbzuJYpjCG7YvDg40ImUMbH_vY1DIm7JBnhCP3APSddesyT6xB0pF5i6XhusEOWUcuTL1Q/exec';
-const PLN_USERNAME = '9518704ZY';
+const PLN_USERNAME = '9418672ZY';
 const PLN_PASSWORD = 'mblendez';
 
 console.log('========================================');
@@ -331,17 +371,12 @@ if "%choice%"=="1" (
     $batchContent | Out-File -FilePath "start-tuli11.bat" -Encoding ASCII
     Show-Success "start-tuli11.bat created"
     
-    # 7. Install npm dependencies
-    Show-Info "Menginstall dependencies npm..."
-    Write-Host "⏳ Ini mungkin butuh beberapa menit..." -ForegroundColor Yellow
-    npm install
+    # 7. Install npm dependencies DENGAN RETRY
+    $dependenciesInstalled = Install-Dependencies
     
-    if ($LASTEXITCODE -eq 0) {
-        Show-Success "Dependencies berhasil diinstall"
-    } else {
-        Show-Error "Gagal install dependencies"
+    if (-not $dependenciesInstalled) {
+        Show-Error "Instalasi dependencies gagal, tetapi tool tetap bisa dicoba."
         Show-Info "Coba jalankan manual: npm install"
-        exit 1
     }
     
     # 8. Verification
@@ -364,21 +399,28 @@ if "%choice%"=="1" (
         exit 1
     }
     
-    # 9. Completed
+    # 9. Completed - SELALU TAMPIL MESKI DEPENDENCIES GAGAL
     Write-Host ""
     Show-Success "🎉 INSTALASI BERHASIL!"
     Show-Info "Project location: $projectPath"
     Write-Host ""
     Show-Info "File yang dibuat:"
-    Get-ChildItem -Recurse | ForEach-Object { 
+    Get-ChildItem | ForEach-Object { 
         Write-Host "   📄 $($_.Name)" -ForegroundColor Gray 
     }
     
     Write-Host ""
     Show-Info "Konfigurasi TUL I-11:"
-    Write-Host "   🔑 Username: 9518704ZY" -ForegroundColor White
+    Write-Host "   🔑 Username: 9418672ZY" -ForegroundColor White
     Write-Host "   🔒 Password: mblendez" -ForegroundColor White
-    Write-Host "   🌐 Apps Script: AKfycbzuJYpjCG7YvDg40ImUMbH_vY1DIm7JBnhCP3APSddesyT6xB0pF5i6XhusEOWUcuTL1Q" -ForegroundColor White
+    
+    Write-Host ""
+    if ($dependenciesInstalled) {
+        Show-Success "✅ Semua dependencies berhasil diinstall"
+    } else {
+        Show-Error "❌ Dependencies gagal, tetapi tool bisa dicoba"
+        Show-Info "Coba jalankan manual: npm install"
+    }
     
     Write-Host ""
     Show-Info "🚀 Menjalankan PLN TUL I-11 Tool..."
@@ -402,5 +444,5 @@ Write-Host "2. Jalankan: start-tuli11.bat" -ForegroundColor White
 Write-Host "3. Atau jalankan langsung: node tulI11.js" -ForegroundColor White
 Write-Host ""
 Show-Info "Untuk update, jalankan lagi script ini:"
-Write-Host "   irm https://raw.githubusercontent.com/username/repo/main/deploy.ps1 | iex" -ForegroundColor White
+Write-Host "   irm https://raw.githubusercontent.com/vatanzjr/otomatis-I11/main/deploy.ps1 | iex" -ForegroundColor White
 Write-Host ""
