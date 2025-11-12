@@ -1,6 +1,6 @@
 # deploy.ps1 - PLN TUL I-11 Automation Tool
 # Created by vatanzjr
-# Simplified Version - Manual Dependencies Install
+# Fixed Version - No BOM in package.json
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  PLN TUL I-11 Automation Tool" -ForegroundColor Cyan
@@ -23,6 +23,35 @@ function Show-Success {
 function Show-Info {
     param([string]$message)
     Write-Host "📢 $message" -ForegroundColor Yellow
+}
+
+# Function untuk cleanup jika ada installasi sebelumnya yang gagal
+function Cleanup-PreviousInstall {
+    param([string]$projectPath)
+    
+    Show-Info "Membersihkan installasi sebelumnya..."
+    
+    # Hapus node_modules jika ada
+    $nodeModulesPath = Join-Path $projectPath "node_modules"
+    if (Test-Path $nodeModulesPath) {
+        try {
+            Remove-Item $nodeModulesPath -Recurse -Force -ErrorAction Stop
+            Show-Success "node_modules lama berhasil dihapus"
+        } catch {
+            Show-Error "Tidak bisa hapus node_modules, tapi lanjut terus..."
+        }
+    }
+    
+    # Hapus package-lock.json jika ada
+    $packageLockPath = Join-Path $projectPath "package-lock.json"
+    if (Test-Path $packageLockPath) {
+        try {
+            Remove-Item $packageLockPath -Force -ErrorAction Stop
+            Show-Success "package-lock.json lama berhasil dihapus"
+        } catch {
+            Show-Error "Tidak bisa hapus package-lock.json, tapi lanjut terus..."
+        }
+    }
 }
 
 # Main installation process
@@ -62,15 +91,16 @@ try {
     Show-Info "Membuat direktori project: $projectPath"
     
     if (Test-Path $projectPath) {
-        Show-Info "Direktori sudah ada, menghapus yang lama..."
-        Remove-Item $projectPath -Recurse -Force
+        Show-Info "Direktori sudah ada, membersihkan..."
+        Cleanup-PreviousInstall -projectPath $projectPath
+    } else {
+        New-Item -ItemType Directory -Path $projectPath -Force | Out-Null
     }
     
-    New-Item -ItemType Directory -Path $projectPath -Force | Out-Null
     Set-Location $projectPath
     Show-Success "Direktori berhasil dibuat"
     
-    # 4. Create package.json
+    # 4. Create package.json dengan encoding yang benar
     Show-Info "Membuat package.json..."
     $packageJsonContent = @'
 {
@@ -83,7 +113,7 @@ try {
     "tuli11": "node tulI11.js"
   },
   "dependencies": {
-    "puppeteer": "^21.5.2",
+    "puppeteer": "^24.15.0",
     "axios": "^1.5.0",
     "qs": "^6.11.2"
   },
@@ -92,8 +122,10 @@ try {
   "license": "MIT"
 }
 '@
-    $packageJsonContent | Out-File -FilePath "package.json" -Encoding UTF8
-    Show-Success "package.json created"
+    # Gunakan encoding ASCII tanpa BOM
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText("$projectPath\package.json", $packageJsonContent, $utf8NoBom)
+    Show-Success "package.json created dengan encoding yang benar"
     
     # 5. Create tulI11.js dengan hardcoded values
     Show-Info "Membuat tulI11.js..."
@@ -294,7 +326,7 @@ process.on('unhandledRejection', (reason, promise) => {
 // Jalankan program
 main();
 '@
-    $tulI11Content | Out-File -FilePath "tulI11.js" -Encoding UTF8
+    $tulI11Content | Out-File -FilePath "tulI11.js" -Encoding ASCII
     Show-Success "tulI11.js created"
     
     # 6. Create batch file untuk memudahkan user
@@ -306,6 +338,7 @@ color 0B
 title PLN TUL I-11 Tool
 
 :menu
+cls
 echo ========================================
 echo   PLN TUL I-11 Automation Tool
 echo ========================================
@@ -326,7 +359,15 @@ if "%choice%"=="1" (
 ) else if "%choice%"=="2" (
   echo Menginstall dependencies...
   echo Ini mungkin butuh beberapa menit...
+  echo.
   npm install
+  echo.
+  if %errorlevel% equ 0 (
+    echo ✅ Dependencies berhasil diinstall!
+  ) else (
+    echo ❌ Install dependencies gagal.
+    echo 💡 Coba jalankan sebagai Administrator.
+  )
   echo.
   pause
   goto menu
@@ -364,7 +405,7 @@ if "%choice%"=="1" (
         exit 1
     }
     
-    # 8. Completed - TANPA AUTO NPM INSTALL
+    # 8. Completed
     Write-Host ""
     Show-Success "🎉 INSTALASI FILE BERHASIL!"
     Show-Info "Project location: $projectPath"
@@ -389,9 +430,10 @@ if "%choice%"=="1" (
     Write-Host "   node tulI11.js" -ForegroundColor White
     Write-Host ""
     
-    Show-Info "⏰ NOTE:"
-    Write-Host "   Proses 'npm install' mungkin butuh 2-5 menit" -ForegroundColor Yellow
-    Write-Host "   Pastikan koneksi internet stabil" -ForegroundColor Yellow
+    Show-Info "💡 TIPS:"
+    Write-Host "   - Jalankan sebagai Administrator jika ada permission error" -ForegroundColor Yellow
+    Write-Host "   - Pastikan koneksi internet stabil" -ForegroundColor Yellow
+    Write-Host "   - Proses install butuh 2-5 menit" -ForegroundColor Yellow
     Write-Host ""
     
     # 9. Tanya user apakah mau jalankan batch file sekarang
