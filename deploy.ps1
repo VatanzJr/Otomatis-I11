@@ -1,6 +1,6 @@
 # deploy.ps1 - PLN TUL I-11 Automation Tool
 # Created by vatanzjr
-# Fixed Version - No BOM in package.json
+# Robust Version with Self-Diagnose Menu
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  PLN TUL I-11 Automation Tool" -ForegroundColor Cyan
@@ -110,7 +110,8 @@ try {
   "main": "tulI11.js",
   "scripts": {
     "start": "node tulI11.js",
-    "tuli11": "node tulI11.js"
+    "tuli11": "node tulI11.js",
+    "test-deps": "node -e \"try { require('puppeteer'); console.log('✅ Puppeteer OK'); } catch(e) { console.log('❌ Puppeteer missing'); } try { require('axios'); console.log('✅ Axios OK'); } catch(e) { console.log('❌ Axios missing'); } try { require('qs'); console.log('✅ QS OK'); } catch(e) { console.log('❌ QS missing'); }\""
   },
   "dependencies": {
     "puppeteer": "^24.15.0",
@@ -329,13 +330,16 @@ main();
     $tulI11Content | Out-File -FilePath "tulI11.js" -Encoding ASCII
     Show-Success "tulI11.js created"
     
-    # 6. Create batch file untuk memudahkan user
-    Show-Info "Membuat file batch untuk kemudahan penggunaan..."
+    # 6. Create robust batch file dengan self-diagnose
+    Show-Info "Membuat file batch dengan fitur self-diagnose..."
     $batchContent = @'
 @echo off
 chcp 65001 >nul
 color 0B
 title PLN TUL I-11 Tool
+
+set "NODE_PATH=%~dp0node_modules"
+set "NODE_ENV=production"
 
 :menu
 cls
@@ -345,36 +349,142 @@ echo ========================================
 echo.
 echo [1] Jalankan TUL I-11 Tool
 echo [2] Install Dependencies (npm install)
-echo [3] Buka Folder Project
-echo [4] Keluar
+echo [3] Fix Module Path Issue
+echo [4] Test Dependencies
+echo [5] Buka Folder Project
+echo [6] Keluar
 echo.
-set /p choice="Pilih opsi (1/4): "
+set /p choice="Pilih opsi (1/6): "
 
 if "%choice%"=="1" (
-  echo Memulai TUL I-11 Tool...
+  cls
+  echo ========================================
+  echo   JALANKAN TUL I-11 TOOL
+  echo ========================================
+  echo.
+  echo Memeriksa dependencies...
+  echo.
+  node -e "try { require('puppeteer'); console.log('✅ Puppeteer OK'); } catch(e) { console.log('❌ Puppeteer missing'); process.exit(1); }" >nul 2>&1
+  if errorlevel 1 (
+    echo ❌ ERROR: Module puppeteer tidak ditemukan!
+    echo.
+    echo 💡 SOLUSI:
+    echo   1. Pilih option [2] untuk install dependencies
+    echo   2. Atau pilih [3] untuk fix module path
+    echo   3. Pastikan sudah run sebagai Administrator
+    echo.
+    pause
+    goto menu
+  )
+  
+  node -e "try { require('axios'); console.log('✅ Axios OK'); } catch(e) { console.log('❌ Axios missing'); process.exit(1); }" >nul 2>&1
+  if errorlevel 1 (
+    echo ❌ ERROR: Module axios tidak ditemukan!
+    echo.
+    echo 💡 SOLUSI:
+    echo   1. Pilih option [2] untuk install dependencies
+    echo   2. Atau pilih [3] untuk fix module path
+    echo   3. Pastikan sudah run sebagai Administrator
+    echo.
+    pause
+    goto menu
+  )
+  
+  node -e "try { require('qs'); console.log('✅ QS OK'); } catch(e) { console.log('❌ QS missing'); process.exit(1); }" >nul 2>&1
+  if errorlevel 1 (
+    echo ❌ ERROR: Module qs tidak ditemukan!
+    echo.
+    echo 💡 SOLUSI:
+    echo   1. Pilih option [2] untuk install dependencies
+    echo   2. Atau pilih [3] untuk fix module path  
+    echo   3. Pastikan sudah run sebagai Administrator
+    echo.
+    pause
+    goto menu
+  )
+  
+  echo ✅ Semua dependencies OK!
+  echo.
+  echo 🚀 Menjalankan TUL I-11 Tool...
+  echo.
   node tulI11.js
   echo.
   pause
   goto menu
 ) else if "%choice%"=="2" (
-  echo Menginstall dependencies...
-  echo Ini mungkin butuh beberapa menit...
+  cls
+  echo ========================================
+  echo   INSTALL DEPENDENCIES
+  echo ========================================
   echo.
-  npm install
+  echo Menginstall dependencies...
+  echo ⏳ Ini mungkin butuh beberapa menit...
+  echo.
+  call npm install
   echo.
   if %errorlevel% equ 0 (
     echo ✅ Dependencies berhasil diinstall!
+    echo.
+    echo 💡 Sekarang test dengan option [4]
   ) else (
     echo ❌ Install dependencies gagal.
-    echo 💡 Coba jalankan sebagai Administrator.
+    echo.
+    echo 💡 Coba:
+    echo   1. Jalankan sebagai Administrator
+    echo   2. Pastikan koneksi internet stabil
+    echo   3. Coba option [3] untuk fix
   )
   echo.
   pause
   goto menu
 ) else if "%choice%"=="3" (
-  explorer .
+  cls
+  echo ========================================
+  echo   FIX MODULE PATH ISSUE
+  echo ========================================
+  echo.
+  echo Memperbaiki module path...
+  echo.
+  echo 1. Membersihkan cache...
+  call npm cache clean --force
+  echo.
+  echo 2. Hapus node_modules lama...
+  rmdir /s /q node_modules 2>nul
+  echo.
+  echo 3. Install ulang dependencies...
+  call npm install
+  echo.
+  echo 4. Verifikasi install...
+  node -e "try { require('puppeteer'); console.log('✅ Puppeteer OK'); } catch(e) { console.log('❌ Puppeteer missing'); }"
+  node -e "try { require('axios'); console.log('✅ Axios OK'); } catch(e) { console.log('❌ Axios missing'); }"
+  node -e "try { require('qs'); console.log('✅ QS OK'); } catch(e) { console.log('❌ QS missing'); }"
+  echo.
+  echo 💡 Sekarang test dengan option [4]
+  echo.
+  pause
   goto menu
 ) else if "%choice%"=="4" (
+  cls
+  echo ========================================
+  echo   TEST DEPENDENCIES
+  echo ========================================
+  echo.
+  echo Testing semua dependencies...
+  echo.
+  node -e "try { require('puppeteer'); console.log('✅ Puppeteer OK'); } catch(e) { console.log('❌ Puppeteer missing'); }"
+  node -e "try { require('axios'); console.log('✅ Axios OK'); } catch(e) { console.log('❌ Axios missing'); }"
+  node -e "try { require('qs'); console.log('✅ QS OK'); } catch(e) { console.log('❌ QS missing'); }"
+  echo.
+  echo 💡 STATUS:
+  echo   - Jika semua ✅ OK: Bisa jalankan option [1]
+  echo   - Jika ada ❌ missing: Jalankan option [2] atau [3]
+  echo.
+  pause
+  goto menu
+) else if "%choice%"=="5" (
+  explorer .
+  goto menu
+) else if "%choice%"=="6" (
   exit
 ) else (
   echo Pilihan tidak valid!
@@ -383,12 +493,29 @@ if "%choice%"=="1" (
 )
 '@
     $batchContent | Out-File -FilePath "start-tuli11.bat" -Encoding ASCII
-    Show-Success "start-tuli11.bat created"
+    Show-Success "start-tuli11.bat created dengan fitur self-diagnose"
     
-    # 7. Verification
+    # 7. Create quick test file
+    Show-Info "Membuat file test cepat..."
+    $testContent = @'
+@echo off
+echo Testing Node.js dan dependencies...
+node --version
+npm --version
+echo.
+echo Testing modules...
+node -e "try { require('puppeteer'); console.log('✅ Puppeteer OK'); } catch(e) { console.log('❌ Puppeteer error:', e.message); }"
+node -e "try { require('axios'); console.log('✅ Axios OK'); } catch(e) { console.log('❌ Axios error:', e.message); }" 
+node -e "try { require('qs'); console.log('✅ QS OK'); } catch(e) { console.log('❌ QS error:', e.message); }"
+pause
+'@
+    $testContent | Out-File -FilePath "test-deps.bat" -Encoding ASCII
+    Show-Success "test-deps.bat created"
+    
+    # 8. Verification
     Show-Info "Memverifikasi instalasi..."
     
-    $requiredFiles = @("package.json", "tulI11.js", "start-tuli11.bat")
+    $requiredFiles = @("package.json", "tulI11.js", "start-tuli11.bat", "test-deps.bat")
     $allFilesExist = $true
     
     foreach ($file in $requiredFiles) {
@@ -405,7 +532,7 @@ if "%choice%"=="1" (
         exit 1
     }
     
-    # 8. Completed
+    # 9. Completed
     Write-Host ""
     Show-Success "🎉 INSTALASI FILE BERHASIL!"
     Show-Info "Project location: $projectPath"
@@ -417,33 +544,49 @@ if "%choice%"=="1" (
     }
     Write-Host ""
     
-    Show-Info "🚀 LANGKAH SELANJUTNYA:"
-    Write-Host "1. Buka folder: $projectPath" -ForegroundColor White
-    Write-Host "2. Jalankan: start-tuli11.bat" -ForegroundColor White
-    Write-Host "3. Pilih option [2] untuk install dependencies" -ForegroundColor White
-    Write-Host "4. Setelah dependencies terinstall, pilih [1] untuk menjalankan" -ForegroundColor White
+    Show-Info "🚀 CARA MENGGUNAKAN:"
+    Write-Host "   1. Buka folder: $projectPath" -ForegroundColor White
+    Write-Host "   2. Jalankan: start-tuli11.bat" -ForegroundColor White
+    Write-Host "   3. Pilih [4] Test Dependencies TERLEBIH DAHULU" -ForegroundColor White
+    Write-Host "   4. Jika ada yang missing, pilih [2] atau [3]" -ForegroundColor White
+    Write-Host "   5. Setelah semua ✅ OK, pilih [1] untuk menjalankan" -ForegroundColor White
     Write-Host ""
     
-    Show-Info "🔧 ATAU JALANKAN MANUAL DI POWERSHELL:"
-    Write-Host "   cd `"$projectPath`"" -ForegroundColor White
-    Write-Host "   npm install" -ForegroundColor White
-    Write-Host "   node tulI11.js" -ForegroundColor White
-    Write-Host ""
-    
-    Show-Info "💡 TIPS:"
+    Show-Info "💡 TIPS PENTING:"
     Write-Host "   - Jalankan sebagai Administrator jika ada permission error" -ForegroundColor Yellow
-    Write-Host "   - Pastikan koneksi internet stabil" -ForegroundColor Yellow
-    Write-Host "   - Proses install butuh 2-5 menit" -ForegroundColor Yellow
+    Write-Host "   - Selalu test dependencies dulu sebelum run tool" -ForegroundColor Yellow
+    Write-Host "   - Menu punya fitur auto-diagnose dan fix" -ForegroundColor Yellow
     Write-Host ""
     
-    # 9. Tanya user apakah mau jalankan batch file sekarang
-    $answer = Read-Host "Jalankan menu tool sekarang? (y/n)"
+    # 10. Tanya user apakah mau test sekarang
+    $answer = Read-Host "Jalankan test dependencies sekarang? (y/n)"
     if ($answer -eq 'y' -or $answer -eq 'Y') {
-        Show-Info "Membuka menu tool..."
+        Show-Info "Menjalankan test dependencies..."
         Start-Sleep -Seconds 2
+        
+        # Test Node.js dan npm
+        Write-Host "=== TEST NODE.JS & NPM ===" -ForegroundColor Cyan
+        node --version
+        npm --version
+        
+        # Test jika dependencies sudah ada
+        Write-Host "`n=== TEST DEPENDENCIES ===" -ForegroundColor Cyan
+        if (Test-Path "node_modules") {
+            Write-Host "node_modules ditemukan..." -ForegroundColor Green
+            node -e "try { require('puppeteer'); console.log('✅ Puppeteer OK'); } catch(e) { console.log('❌ Puppeteer missing'); }"
+            node -e "try { require('axios'); console.log('✅ Axios OK'); } catch(e) { console.log('❌ Axios missing'); }"
+            node -e "try { require('qs'); console.log('✅ QS OK'); } catch(e) { console.log('❌ QS missing'); }"
+        } else {
+            Write-Host "❌ node_modules belum ada" -ForegroundColor Red
+            Write-Host "💡 Jalankan 'npm install' dulu" -ForegroundColor Yellow
+        }
+        
+        Write-Host ""
+        Show-Info "Tekan Enter untuk membuka menu tool..."
+        Pause
         Start-Process "start-tuli11.bat" -Wait
     } else {
-        Show-Info "Anda bisa jalankan tool nanti dengan membuka:"
+        Show-Info "Anda bisa jalankan tool nanti dengan:"
         Write-Host "   $projectPath\start-tuli11.bat" -ForegroundColor White
         Write-Host ""
         Show-Info "Tekan Enter untuk membuka folder..."
