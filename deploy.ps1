@@ -183,7 +183,7 @@ const qs = require('qs');
 // === KONFIGURASI HARCODED ===
 const APPS_SCRIPT_PKBA_URL = 'https://script.google.com/macros/s/AKfycbzuJYpjCG7YvDg40ImUMbH_vY1DIm7JBnhCP3APSddesyT6xB0pF5i6XhusEOWUcuTL1Q/exec';
 const PLN_USERNAME = '9518704ZY';  // DARI CODE ORIGINAL
-const PLN_PASSWORD = 'CMS';        // DARI CODE ORIGINAL
+const PLN_PASSWORD = 'Mblendez';        // DARI CODE ORIGINAL
 
 console.log('========================================');
 console.log('  PLN TUL I-11 Automation Tool');
@@ -462,4 +462,5 @@ Write-Host "   Atau langsung: node tulI11.js" -ForegroundColor White
 Write-Host ""
 Show-Info "Hanya install sekali, selanjutnya langsung run tool saja!"
 Write-Host ""
+
 
