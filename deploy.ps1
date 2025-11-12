@@ -1,5 +1,6 @@
 # deploy.ps1 - PLN TUL I-11 Automation Tool
 # Created by vatanzjr
+# Simplified Version - Manual Dependencies Install
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  PLN TUL I-11 Automation Tool" -ForegroundColor Cyan
@@ -24,46 +25,6 @@ function Show-Info {
     Write-Host "📢 $message" -ForegroundColor Yellow
 }
 
-# Function untuk install dependencies dengan retry
-function Install-Dependencies {
-    $maxRetries = 2
-    $retryCount = 0
-    
-    while ($retryCount -lt $maxRetries) {
-        try {
-            Show-Info "Menginstall dependencies npm (Attempt $($retryCount + 1))..."
-            
-            # Jalankan npm install dengan timeout
-            $process = Start-Process -FilePath "npm" -ArgumentList "install" -Wait -PassThru -NoNewWindow
-            
-            if ($process.ExitCode -eq 0) {
-                Show-Success "Dependencies berhasil diinstall"
-                return $true
-            } else {
-                Show-Error "npm install gagal dengan exit code: $($process.ExitCode)"
-                $retryCount++
-                
-                if ($retryCount -lt $maxRetries) {
-                    Show-Info "Retry dalam 5 detik..."
-                    Start-Sleep -Seconds 5
-                }
-            }
-        } catch {
-            Show-Error "Error selama npm install: $($_.Exception.Message)"
-            $retryCount++
-            
-            if ($retryCount -lt $maxRetries) {
-                Show-Info "Retry dalam 5 detik..."
-                Start-Sleep -Seconds 5
-            }
-        }
-    }
-    
-    Show-Error "Gagal install dependencies setelah $maxRetries attempts"
-    Show-Info "Coba jalankan manual: npm install"
-    return $false
-}
-
 # Main installation process
 try {
     Show-Info "Memulai instalasi PLN TUL I-11 Automation Tool..."
@@ -74,7 +35,7 @@ try {
     if (-not $nodeCheck) {
         Show-Error "Node.js tidak terinstall!"
         Show-Info "Silakan download Node.js dari: https://nodejs.org"
-        Show-Info "Atau jalankan: winget install OpenJS.NodeJS"
+        Show-Info "Pilih version LTS (Recommended for most users)"
         Write-Host ""
         Show-Info "Setelah Node.js terinstall, jalankan script ini lagi."
         exit 1
@@ -89,6 +50,7 @@ try {
     $npmCheck = Get-Command npm -ErrorAction SilentlyContinue
     if (-not $npmCheck) {
         Show-Error "NPM tidak tersedia!"
+        Show-Info "Pastikan Node.js terinstall dengan benar."
         exit 1
     }
     
@@ -336,50 +298,53 @@ main();
     Show-Success "tulI11.js created"
     
     # 6. Create batch file untuk memudahkan user
-    Show-Info "Membatu file batch untuk kemudahan penggunaan..."
+    Show-Info "Membuat file batch untuk kemudahan penggunaan..."
     $batchContent = @'
 @echo off
 chcp 65001 >nul
 color 0B
 title PLN TUL I-11 Tool
 
+:menu
 echo ========================================
 echo   PLN TUL I-11 Automation Tool
 echo ========================================
 echo.
 echo [1] Jalankan TUL I-11 Tool
-echo [2] Buka Folder Project
-echo [3] Keluar
+echo [2] Install Dependencies (npm install)
+echo [3] Buka Folder Project
+echo [4] Keluar
 echo.
-set /p choice="Pilih opsi (1/3): "
+set /p choice="Pilih opsi (1/4): "
 
 if "%choice%"=="1" (
   echo Memulai TUL I-11 Tool...
   node tulI11.js
+  echo.
   pause
+  goto menu
 ) else if "%choice%"=="2" (
-  explorer .
-  exit
+  echo Menginstall dependencies...
+  echo Ini mungkin butuh beberapa menit...
+  npm install
+  echo.
+  pause
+  goto menu
 ) else if "%choice%"=="3" (
+  explorer .
+  goto menu
+) else if "%choice%"=="4" (
   exit
 ) else (
   echo Pilihan tidak valid!
   timeout /t 2 >nul
-  %0
+  goto menu
 )
 '@
     $batchContent | Out-File -FilePath "start-tuli11.bat" -Encoding ASCII
     Show-Success "start-tuli11.bat created"
     
-    # 7. Install npm dependencies DENGAN RETRY
-    $dependenciesInstalled = Install-Dependencies
-    
-    if (-not $dependenciesInstalled) {
-        Show-Error "Instalasi dependencies gagal, tetapi tool tetap bisa dicoba."
-        Show-Info "Coba jalankan manual: npm install"
-    }
-    
-    # 8. Verification
+    # 7. Verification
     Show-Info "Memverifikasi instalasi..."
     
     $requiredFiles = @("package.json", "tulI11.js", "start-tuli11.bat")
@@ -399,50 +364,62 @@ if "%choice%"=="1" (
         exit 1
     }
     
-    # 9. Completed - SELALU TAMPIL MESKI DEPENDENCIES GAGAL
+    # 8. Completed - TANPA AUTO NPM INSTALL
     Write-Host ""
-    Show-Success "🎉 INSTALASI BERHASIL!"
+    Show-Success "🎉 INSTALASI FILE BERHASIL!"
     Show-Info "Project location: $projectPath"
     Write-Host ""
-    Show-Info "File yang dibuat:"
+    
+    Show-Info "📋 FILE YANG DIBUAT:"
     Get-ChildItem | ForEach-Object { 
         Write-Host "   📄 $($_.Name)" -ForegroundColor Gray 
     }
-    
     Write-Host ""
-    Show-Info "Konfigurasi TUL I-11:"
-    Write-Host "   🔑 Username: 9418672ZY" -ForegroundColor White
-    Write-Host "   🔒 Password: mblendez" -ForegroundColor White
     
+    Show-Info "🚀 LANGKAH SELANJUTNYA:"
+    Write-Host "1. Buka folder: $projectPath" -ForegroundColor White
+    Write-Host "2. Jalankan: start-tuli11.bat" -ForegroundColor White
+    Write-Host "3. Pilih option [2] untuk install dependencies" -ForegroundColor White
+    Write-Host "4. Setelah dependencies terinstall, pilih [1] untuk menjalankan" -ForegroundColor White
     Write-Host ""
-    if ($dependenciesInstalled) {
-        Show-Success "✅ Semua dependencies berhasil diinstall"
+    
+    Show-Info "🔧 ATAU JALANKAN MANUAL DI POWERSHELL:"
+    Write-Host "   cd `"$projectPath`"" -ForegroundColor White
+    Write-Host "   npm install" -ForegroundColor White
+    Write-Host "   node tulI11.js" -ForegroundColor White
+    Write-Host ""
+    
+    Show-Info "⏰ NOTE:"
+    Write-Host "   Proses 'npm install' mungkin butuh 2-5 menit" -ForegroundColor Yellow
+    Write-Host "   Pastikan koneksi internet stabil" -ForegroundColor Yellow
+    Write-Host ""
+    
+    # 9. Tanya user apakah mau jalankan batch file sekarang
+    $answer = Read-Host "Jalankan menu tool sekarang? (y/n)"
+    if ($answer -eq 'y' -or $answer -eq 'Y') {
+        Show-Info "Membuka menu tool..."
+        Start-Sleep -Seconds 2
+        Start-Process "start-tuli11.bat" -Wait
     } else {
-        Show-Error "❌ Dependencies gagal, tetapi tool bisa dicoba"
-        Show-Info "Coba jalankan manual: npm install"
+        Show-Info "Anda bisa jalankan tool nanti dengan membuka:"
+        Write-Host "   $projectPath\start-tuli11.bat" -ForegroundColor White
+        Write-Host ""
+        Show-Info "Tekan Enter untuk membuka folder..."
+        Pause
+        Start-Process "explorer" -ArgumentList $projectPath -Wait
     }
-    
-    Write-Host ""
-    Show-Info "🚀 Menjalankan PLN TUL I-11 Tool..."
-    
-    # Wait a moment before starting
-    Start-Sleep -Seconds 3
-    
-    # Run the batch file
-    Start-Process "start-tuli11.bat" -Wait
     
 } catch {
     Show-Error "Terjadi error selama instalasi: $($_.Exception.Message)"
-    exit 1
+    Write-Host ""
+    Show-Info "Silakan coba lagi atau hubungi support."
 }
 
 # Final message
 Write-Host ""
-Show-Info "CARA MENJALANKAN ULANG:"
-Write-Host "1. Buka folder: $projectPath" -ForegroundColor White
-Write-Host "2. Jalankan: start-tuli11.bat" -ForegroundColor White
-Write-Host "3. Atau jalankan langsung: node tulI11.js" -ForegroundColor White
+Show-Info "📞 SUPPORT & UPDATE:"
+Write-Host "   GitHub: https://github.com/vatanzjr/otomatis-I11" -ForegroundColor White
 Write-Host ""
-Show-Info "Untuk update, jalankan lagi script ini:"
+Show-Info "Untuk install ulang atau update, jalankan:"
 Write-Host "   irm https://raw.githubusercontent.com/vatanzjr/otomatis-I11/main/deploy.ps1 | iex" -ForegroundColor White
 Write-Host ""
